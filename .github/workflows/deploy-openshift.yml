@@ -1,0 +1,74 @@
+# CI/CD pipeline for the CSC8104 Flight service.
+#
+# On every push to main:
+#   1. "test"   - builds the project and runs the REST Assured tests with Maven.
+#   2. "deploy" - only if the tests pass: logs in to OpenShift, builds a new image from the pushed
+#                 commit (S2I BuildConfig) and rolls out a new Knative revision so the new image goes live.
+#
+# Needs two repository secrets (GitHub repo -> Settings -> Secrets and variables -> Actions):
+#   OPENSHIFT_SERVER - API URL, e.g. https://api.rm2.thpm.p1.openshiftapps.com:6443
+#   OPENSHIFT_TOKEN  - token of the "github-actions" service account in the yogiraj-max-dev project
+#
+# Can also be run by hand: Actions tab -> "Test and deploy to OpenShift" -> Run workflow.
+ 
+name: Test and deploy to OpenShift
+ 
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+ 
+env:
+  APP_NAME: csc-8104-enterprise-java-yogiraj-sadhan
+  OPENSHIFT_NAMESPACE: yogiraj-max-dev
+ 
+jobs:
+  test:
+    name: Build and run tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+ 
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: maven
+ 
+      - name: Run Maven tests
+        run: |
+          chmod +x mvnw
+          ./mvnw -B clean test
+ 
+  deploy:
+    name: Deploy to OpenShift
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install the oc CLI
+        uses: redhat-actions/openshift-tools-installer@v1
+        with:
+          oc: "4"
+ 
+      - name: Log in to OpenShift
+        uses: redhat-actions/oc-login@v1
+        with:
+          openshift_server_url: ${{ secrets.OPENSHIFT_SERVER }}
+          openshift_token: ${{ secrets.OPENSHIFT_TOKEN }}
+          namespace: ${{ env.OPENSHIFT_NAMESPACE }}
+ 
+      - name: Build a new image from this commit
+        run: oc start-build "$APP_NAME" --commit="$GITHUB_SHA" --follow --wait
+ 
+      - name: Roll out a new Knative revision
+        run: |
+          # Changing an annotation on the revision template makes Knative create a new revision,
+          # which pulls the image that was just built.
+          oc patch ksvc "$APP_NAME" --type merge \
+            -p "{\"spec\":{\"template\":{\"metadata\":{\"annotations\":{\"redeploy\":\"$GITHUB_SHA\"}}}}}"
+          oc wait ksvc "$APP_NAME" --for=condition=Ready --timeout=300s
+ 
+      - name: Show the live URL
+        run: echo "Deployed to $(oc get ksvc "$APP_NAME" -o jsonpath='{.status.url}')/q/swagger-ui"
