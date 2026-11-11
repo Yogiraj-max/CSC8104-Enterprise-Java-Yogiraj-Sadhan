@@ -1,0 +1,3 @@
+-- Optional sample data for local development. Left empty so the automated tests start from a clean database.
+-- Example (uncomment to use in dev mode):
+-- insert into flight (flight_number, departure, destination) values ('BA123', 'NCL', 'LHR');
