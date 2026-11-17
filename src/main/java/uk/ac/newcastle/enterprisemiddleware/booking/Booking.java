@@ -1,9 +1,11 @@
 package uk.ac.newcastle.enterprisemiddleware.booking;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import org.eclipse.microprofile.openapi.annotations.media.Schema;
 import uk.ac.newcastle.enterprisemiddleware.customer.Customer;
 import uk.ac.newcastle.enterprisemiddleware.flight.Flight;
+import uk.ac.newcastle.enterprisemiddleware.travelagent.TravelAgentBooking;
 
 import javax.persistence.*;
 import javax.validation.constraints.Future;
@@ -75,6 +77,12 @@ public class Booking implements Serializable {
     @Schema(example = "1", description = "Id of an existing Flight")
     private Long flightId;
 
+    // The TravelAgent booking (Part 3) this flight booking belongs to, if any. CascadeType.REMOVE means that when this
+    // flight booking is deleted (directly, or through a Customer/Flight cascade) its TravelAgentBooking goes too.
+    @JsonIgnore
+    @OneToOne(mappedBy = "flightBooking", cascade = CascadeType.REMOVE)
+    private TravelAgentBooking travelAgentBooking;
+
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
 
@@ -86,6 +94,9 @@ public class Booking implements Serializable {
 
     public LocalDate getBookingDate() { return bookingDate; }
     public void setBookingDate(LocalDate bookingDate) { this.bookingDate = bookingDate; }
+
+    public TravelAgentBooking getTravelAgentBooking() { return travelAgentBooking; }
+    public void setTravelAgentBooking(TravelAgentBooking travelAgentBooking) { this.travelAgentBooking = travelAgentBooking; }
 
     public Long getCustomerId() { return customer != null ? customer.getId() : customerId; }
     public void setCustomerId(Long customerId) { this.customerId = customerId; }
